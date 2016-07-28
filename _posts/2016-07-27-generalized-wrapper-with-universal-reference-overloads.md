@@ -17,44 +17,49 @@ wrapper<std::string> w2(w1);       // wrap a string which is constructed from ra
 wrapper<const std::string> w3(w1); // wrap a string which is copy-constructed from that in w2
 ```
 
-In order to make this work, we need an explicit copy constructor which accounts for different compatible instances of the `wrapper` template.
-The naive approach fails:
+In order to make this work, we need an explicit copy constructor which accounts for different compatible instances of the `wrapper` template:
 
 ```cpp
 template<typename T>
 struct wrapper
 {
     T value;
+    
+    // Primary constructor
     template<typename U>
     wrapper( U && u )
       : value( std::forward<U>(u) ) {}
 
-    // The explicit copy constructor for accepting other instances of the template
+    // Copy constructor accepting other instances of the template
     template<typename U>
     wrapper( wrapper<U> const & w )  // Suspicious overload!
       : value( w.value ) {}
 };
 ```
 
-This fails for exactly the same reason explained in Niebler's article. We need a SFINAE tactic to set it right, this time with a slightly more advanced disabler.
+This naive approach fails for exactly the same reason explained in Niebler's article.
+Against our intention, the primary constructor resolves to be a better match 
+for an lvalue non-const reference arguement, even if that arguments is a `wrapper<U>`.
+
+We can use a technique similar to Niebler's, this time with a slightly more advanced disabler:
 
 ```cpp
 template<typename T>
 struct wrapper
 {
     T value;
-    template<typename U, typename = disableIsSameTemplateInstance<T,U>  >
+    
+    template<typename U, typename = disable_if_same_template<T,U>>
     wrapper( U && u )
       : value( std::forward<U>(u) ) {}
 
-    // An explicit copy constructor accepting other instances of the template
     template<typename U>
     wrapper( wrapper<U> const & w ) 
       : value( w.value ) {}
 };
 ```
 
-`disableIsSameTemplateInstance` has two parts:
+`disable_if_same_template` has two parts:
 
 
 ```cpp
